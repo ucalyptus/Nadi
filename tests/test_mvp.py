@@ -13,7 +13,7 @@ class OpenRiverMVPTests(unittest.TestCase):
         created = gw.create_session("t1")
         sid = created["session_id"]
         gw.send_command(sid, "echo", {"text": "hi"})
-        gw.send_command(sid, "model", {"prompt": "p"})
+        model_out = gw.send_command(sid, "model", {"prompt": "p"})
         gw.send_command(sid, "tool", {"name": "uppercase", "args": {"text": "river"}})
         events = gw.get_session_events(sid)
         types = [e["event_type"] for e in events]
@@ -21,6 +21,7 @@ class OpenRiverMVPTests(unittest.TestCase):
         self.assertIn("assistant.message", types)
         self.assertIn("model.response", types)
         self.assertIn("tool.result", types)
+        self.assertEqual(model_out["events"][0]["payload"]["text"], "deterministic-model:p")
         self.assertEqual(stack["store"].get_session(sid)["status"], "running")
 
     def test_broker_not_in_tool_path(self):
@@ -53,6 +54,9 @@ class OpenRiverMVPTests(unittest.TestCase):
         time.sleep(1)
         with self.assertRaises(JWTError):
             jwt.verify(expired, "a", "tool")
+        cell_only = jwt.sign("a", "cell", ttl_seconds=30)
+        with self.assertRaises(JWTError):
+            jwt.verify(cell_only, "a", "tool")
 
     def test_credentials_proxy_audit(self):
         stack = local_stack(":memory:")

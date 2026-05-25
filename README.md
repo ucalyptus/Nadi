@@ -117,6 +117,26 @@ Run tests:
 python -m unittest discover -s tests
 ```
 
+Run the acceptance/property/Gherkin coverage gate:
+
+```bash
+python scripts/coverage_check.py --min 75
+```
+
+Run targeted mutation testing for core invariants:
+
+```bash
+python scripts/mutation_test.py
+```
+
+Test suite layers:
+
+- Unit and integration tests: `tests/test_mvp.py`
+- Property-style randomized tests: `tests/test_properties.py`
+- HTTP acceptance tests: `tests/test_acceptance_http.py`
+- Gherkin acceptance criteria: `features/openriver_acceptance.feature` executed by `tests/test_gherkin_acceptance.py`
+- Mutation gate: `scripts/mutation_test.py`
+
 ### Local MVP limitations
 
 - SQLite is used for local dev; production remains Postgres-oriented.
