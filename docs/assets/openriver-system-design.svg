@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="900" viewBox="0 0 1280 900" role="img" aria-labelledby="title desc">
+  <title id="title">OpenRiver System Design and Request Lifecycle</title>
+  <desc id="desc">System design diagram showing session creation, command ingestion, runtime processing, direct sandbox tool execution, credential exchange, event persistence, reconstruction, and streaming response.</desc>
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0 L0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/></pattern>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#22d3ee"/></marker>
+    <marker id="arrow2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#34d399"/></marker>
+    <marker id="arrow3" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#a78bfa"/></marker>
+    <marker id="arrow4" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#fbbf24"/></marker>
+    <style>
+      .bg{fill:#020617}.grid{fill:url(#grid)}.title{font:700 28px 'JetBrains Mono',Consolas,monospace;fill:#e2e8f0}.subtitle{font:13px 'JetBrains Mono',Consolas,monospace;fill:#94a3b8}
+      .label{font:700 13px 'JetBrains Mono',Consolas,monospace;fill:#f8fafc}.sub{font:10px 'JetBrains Mono',Consolas,monospace;fill:#cbd5e1}.tiny{font:9px 'JetBrains Mono',Consolas,monospace;fill:#94a3b8}.step{font:700 11px 'JetBrains Mono',Consolas,monospace;fill:#020617}
+      .boxbg{fill:#0f172a}.edge{fill:rgba(8,51,68,.46);stroke:#22d3ee;stroke-width:1.5}.runtime{fill:rgba(6,78,59,.46);stroke:#34d399;stroke-width:1.5}.db{fill:rgba(76,29,149,.46);stroke:#a78bfa;stroke-width:1.5}.exec{fill:rgba(120,53,15,.36);stroke:#fbbf24;stroke-width:1.5}.sec{fill:rgba(136,19,55,.42);stroke:#fb7185;stroke-width:1.5}.external{fill:rgba(30,41,59,.64);stroke:#94a3b8;stroke-width:1.5}
+      .arrow{stroke:#22d3ee;stroke-width:2.2;fill:none;marker-end:url(#arrow)}.green{stroke:#34d399;stroke-width:2.2;fill:none;marker-end:url(#arrow2)}.purple{stroke:#a78bfa;stroke-width:2.2;fill:none;marker-end:url(#arrow3)}.amber{stroke:#fbbf24;stroke-width:2.2;fill:none;marker-end:url(#arrow4)}.dash{stroke-dasharray:8 6}.flow{font:10px 'JetBrains Mono',Consolas,monospace;fill:#cbd5e1}.boundary{fill:none;stroke:#475569;stroke-width:1.2;stroke-dasharray:8 5}.note{fill:#0f172a;stroke:#64748b;stroke-width:1}
+    </style>
+  </defs>
+  <rect class="bg" width="1280" height="900"/><rect class="grid" width="1280" height="900" opacity=".7"/>
+  <text x="40" y="48" class="title">OpenRiver System Design</text>
+  <text x="40" y="72" class="subtitle">Request lifecycle, persistence model, and recovery invariants</text>
+
+  <rect x="30" y="105" width="1220" height="700" rx="16" class="boundary"/><text x="50" y="128" class="tiny">numbered path: create session → command → runtime → sandbox → event log → stream/reconstruct</text>
+
+  <!-- columns -->
+  <text x="75" y="165" class="sub">Client Plane</text>
+  <text x="295" y="165" class="sub">Stateless Edge</text>
+  <text x="510" y="165" class="sub">Placement / Control</text>
+  <text x="730" y="165" class="sub">Session Runtime</text>
+  <text x="980" y="165" class="sub">Execution + Durable State</text>
+
+  <!-- components -->
+  <rect x="60" y="190" width="150" height="90" rx="8" class="boxbg"/><rect x="60" y="190" width="150" height="90" rx="8" class="external"/>
+  <text x="105" y="222" class="label">Client</text><text x="83" y="246" class="sub">CLI / Web / Bot</text><text x="83" y="263" class="tiny">REST · ACP · SSE</text>
+
+  <rect x="280" y="190" width="165" height="90" rx="8" class="boxbg"/><rect x="280" y="190" width="165" height="90" rx="8" class="edge"/>
+  <text x="330" y="222" class="label">Gateway</text><text x="304" y="246" class="sub">auth + route lookup</text><text x="305" y="263" class="tiny">no per-session state</text>
+
+  <rect x="500" y="190" width="165" height="90" rx="8" class="boxbg"/><rect x="500" y="190" width="165" height="90" rx="8" class="runtime"/>
+  <text x="555" y="222" class="label">Broker</text><text x="526" y="246" class="sub">placement engine</text><text x="525" y="263" class="tiny">not in data path</text>
+
+  <rect x="720" y="190" width="185" height="110" rx="8" class="boxbg"/><rect x="720" y="190" width="185" height="110" rx="8" class="runtime"/>
+  <text x="790" y="222" class="label">Celld</text><text x="746" y="246" class="sub">systemd cell manager</text><text x="745" y="264" class="sub">DB plane on host</text><text x="746" y="283" class="tiny">owns cell lifecycle</text>
+
+  <rect x="735" y="365" width="205" height="135" rx="8" class="boxbg"/><rect x="735" y="365" width="205" height="135" rx="8" class="runtime"/>
+  <text x="795" y="395" class="label">Session Cell</text><text x="760" y="420" class="sub">Go Runtime: sequencer</text><text x="760" y="438" class="sub">tool-call mediation</text><text x="760" y="456" class="sub">ACP Unix socket</text><text x="760" y="478" class="tiny">Pi Harness child: agent loop</text>
+
+  <rect x="1010" y="350" width="180" height="115" rx="8" class="boxbg"/><rect x="1010" y="350" width="180" height="115" rx="8" class="exec"/>
+  <text x="1065" y="380" class="label">Sandboxd</text><text x="1035" y="404" class="sub">tool RPC server</text><text x="1035" y="422" class="sub">nsenter → nspawn</text><text x="1035" y="444" class="tiny">safe tool execution</text>
+
+  <rect x="1010" y="510" width="180" height="95" rx="8" class="boxbg"/><rect x="1010" y="510" width="180" height="95" rx="8" class="sec"/>
+  <text x="1048" y="540" class="label">Credentials Proxy</text><text x="1038" y="564" class="sub">JWT scope check</text><text x="1038" y="583" class="tiny">audit_log insert</text>
+
+  <rect x="980" y="670" width="210" height="95" rx="8" class="boxbg"/><rect x="980" y="670" width="210" height="95" rx="8" class="db"/>
+  <text x="1050" y="700" class="label">Postgres</text><text x="1007" y="724" class="sub">sessions · events · inbox</text><text x="1007" y="742" class="sub">leases · hosts · audit</text>
+
+  <rect x="605" y="670" width="205" height="95" rx="8" class="boxbg"/><rect x="605" y="670" width="205" height="95" rx="8" class="db"/>
+  <text x="650" y="700" class="label">Event Log Replay</text><text x="630" y="724" class="sub">rebuild runtime state</text><text x="630" y="742" class="tiny">cells are replaceable</text>
+
+  <!-- numbered circles -->
+  <g>
+    <circle cx="240" cy="235" r="13" fill="#22d3ee"/><text x="236" y="239" class="step">1</text>
+    <circle cx="472" cy="220" r="13" fill="#34d399"/><text x="468" y="224" class="step">2</text>
+    <circle cx="690" cy="235" r="13" fill="#34d399"/><text x="686" y="239" class="step">3</text>
+    <circle cx="812" cy="332" r="13" fill="#a78bfa"/><text x="808" y="336" class="step">4</text>
+    <circle cx="962" cy="420" r="13" fill="#fbbf24"/><text x="958" y="424" class="step">5</text>
+    <circle cx="1100" cy="488" r="13" fill="#fb7185"/><text x="1096" y="492" class="step">6</text>
+    <circle cx="958" cy="705" r="13" fill="#a78bfa"/><text x="954" y="709" class="step">7</text>
+    <circle cx="838" cy="610" r="13" fill="#a78bfa"/><text x="834" y="614" class="step">8</text>
+    <circle cx="260" cy="320" r="13" fill="#22d3ee"/><text x="256" y="324" class="step">9</text>
+  </g>
+
+  <!-- flows -->
+  <path d="M210 235 C245 235 250 235 280 235" class="arrow"/><text x="220" y="220" class="flow">create / command</text>
+  <path d="M445 220 C465 205 480 205 500 220" class="green"/><text x="448" y="195" class="flow">new session only</text>
+  <path d="M665 235 C690 235 700 235 720 235" class="green dash"/><text x="670" y="220" class="flow">create_cell</text>
+  <path d="M812 300 C812 325 812 340 812 365" class="purple"/><text x="825" y="336" class="flow">start runtime</text>
+  <path d="M445 255 C540 330 620 407 735 420" class="arrow"/><text x="525" y="342" class="flow">existing session route</text>
+  <path d="M940 420 C970 420 985 420 1010 420" class="amber"/><text x="946" y="405" class="flow">direct RPC</text>
+  <path d="M1100 465 C1100 482 1100 495 1100 510" class="amber"/><text x="1115" y="493" class="flow">if token needed</text>
+  <path d="M1010 555 C925 590 925 660 980 705" class="purple dash"/><text x="908" y="625" class="flow">audit</text>
+  <path d="M838 500 C850 610 905 675 980 715" class="purple"/><text x="846" y="594" class="flow">append events</text>
+  <path d="M980 725 C900 760 830 760 810 725" class="purple dash"/><text x="835" y="785" class="flow">reconstruct after crash</text>
+  <path d="M735 455 C540 500 420 400 280 280" class="arrow"/><text x="435" y="460" class="flow">SSE / response stream</text>
+  <path d="M980 700 C760 615 545 610 362 280" class="purple"/><text x="525" y="635" class="flow">gateway read-only lookup / events</text>
+
+  <!-- data model strip -->
+  <rect x="60" y="670" width="460" height="95" rx="8" class="note"/>
+  <text x="82" y="699" class="label">Durable tables</text>
+  <text x="82" y="725" class="sub">sessions · events · command_inbox · session_leases · cell_hosts</text>
+  <text x="82" y="746" class="sub">sandbox_hosts · audit_log</text>
+
+  <!-- invariants strip -->
+  <rect x="60" y="815" width="1130" height="54" rx="8" class="note"/>
+  <text x="82" y="847" class="label">Invariants:</text>
+  <text x="180" y="847" class="sub">Broker is control-plane only · Cell state is replayable · Cells hold short-lived JWTs only · Sandboxes contain no agent code or real tokens</text>
+</svg>

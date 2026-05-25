@@ -16,6 +16,16 @@ OpenRiver replaces an in-memory/container-pool style session runtime with a four
 
 ## Architecture
 
+### Four-tier architecture diagram
+
+![OpenRiver four-tier architecture](docs/assets/openriver-architecture.svg)
+
+### System design / request lifecycle diagram
+
+![OpenRiver system design and request lifecycle](docs/assets/openriver-system-design.svg)
+
+The diagrams above are checked into `docs/assets/` as SVG files so they render directly in GitHub and remain editable as code.
+
 ```mermaid
 flowchart LR
     clients[Slack / Web UI / CLI / CI / Bots] -->|REST / ACP / SSE| gateway[Gateway]
