@@ -129,6 +129,12 @@ Run targeted mutation testing for core invariants:
 python scripts/mutation_test.py
 ```
 
+Run DRY analysis for duplicate code blocks, repeated literals, and repeated function shapes:
+
+```bash
+python scripts/dry_analysis.py --format markdown --max-blocks 2 > docs/DRY_ANALYSIS.md
+```
+
 Test suite layers:
 
 - Unit and integration tests: `tests/test_mvp.py`
@@ -136,6 +142,7 @@ Test suite layers:
 - HTTP acceptance tests: `tests/test_acceptance_http.py`
 - Gherkin acceptance criteria: `features/openriver_acceptance.feature` executed by `tests/test_gherkin_acceptance.py`
 - Mutation gate: `scripts/mutation_test.py`
+- DRY analysis: `scripts/dry_analysis.py` with the latest report in `docs/DRY_ANALYSIS.md`
 
 ### Local MVP limitations
 
