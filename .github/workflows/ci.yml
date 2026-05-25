@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  scaffold-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check required scaffold files
+        run: |
+          test -f README.md
+          test -f docs/BUILD_PLAN.md
+          test -f docs/ARCHITECTURE.md
+          test -f docs/ROADMAP.md
+          test -f migrations/0001_initial_schema.sql
+          test -f proto/aquifer/v1/openriver.proto
+      - name: Check SQL migration is non-empty
+        run: test -s migrations/0001_initial_schema.sql

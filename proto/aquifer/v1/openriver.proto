@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package aquifer.v1;
+
+option go_package = "github.com/openriver/openriver/proto/aquifer/v1;aquiferv1";
+
+service GatewayService {
+  rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse);
+  rpc SendCommand(SendCommandRequest) returns (SendCommandResponse);
+}
+
+service BrokerService {
+  rpc PlaceSession(PlaceSessionRequest) returns (PlaceSessionResponse);
+}
+
+service CellHostControl {
+  rpc CreateCell(CreateCellRequest) returns (CreateCellResponse);
+}
+
+service SandboxService {
+  rpc ExecuteTool(ExecuteToolRequest) returns (ExecuteToolResponse);
+}
+
+message CreateSessionRequest {
+  string tenant_id = 1;
+  string profile_bundle = 2;
+}
+
+message CreateSessionResponse {
+  string session_id = 1;
+  string cell_host_id = 2;
+}
+
+message SendCommandRequest {
+  string session_id = 1;
+  string command_type = 2;
+  bytes payload_json = 3;
+}
+
+message SendCommandResponse {
+  string command_id = 1;
+}
+
+message PlaceSessionRequest {
+  string session_id = 1;
+  string tenant_id = 2;
+}
+
+message PlaceSessionResponse {
+  string cell_host_id = 1;
+  string lease_token = 2;
+}
+
+message CreateCellRequest {
+  string session_id = 1;
+  string lease_token = 2;
+}
+
+message CreateCellResponse {
+  string runtime_socket_path = 1;
+}
+
+message ExecuteToolRequest {
+  string session_id = 1;
+  string tool_name = 2;
+  bytes payload_json = 3;
+  string jwt = 4;
+}
+
+message ExecuteToolResponse {
+  int32 exit_code = 1;
+  bytes stdout = 2;
+  bytes stderr = 3;
+}
