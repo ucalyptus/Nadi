@@ -77,3 +77,30 @@ CREATE INDEX IF NOT EXISTS idx_events_session_sequence
 CREATE INDEX IF NOT EXISTS idx_command_inbox_pending
     ON command_inbox (session_id, status, available_at, id)
     WHERE status = 'pending';
+
+CREATE TABLE IF NOT EXISTS sandbox_hosts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    host_id TEXT NOT NULL UNIQUE,
+    zone TEXT NOT NULL,
+    address TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'unknown',
+    last_heartbeat_at TIMESTAMPTZ,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sandbox_hosts_status_heartbeat
+    ON sandbox_hosts (status, last_heartbeat_at DESC);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id BIGSERIAL PRIMARY KEY,
+    actor TEXT NOT NULL,
+    action TEXT NOT NULL,
+    session_id UUID REFERENCES sessions(id) ON DELETE SET NULL,
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_session_created
+    ON audit_log (session_id, created_at DESC);

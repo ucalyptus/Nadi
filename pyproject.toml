@@ -1,0 +1,14 @@
+[project]
+name = "openriver"
+version = "0.1.0"
+description = "Local MVP of a Postgres-centric session-based agent workload platform."
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "TBD"}
+authors = [{name = "OpenRiver contributors"}]
+
+[project.scripts]
+openriver = "openriver.cli:main"
+
+[tool.setuptools]
+packages = ["openriver"]
