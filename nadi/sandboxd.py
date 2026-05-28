@@ -41,7 +41,13 @@ class Sandboxd:
         elif name == "list_files":
             rel = str(args.get("path", "."))
             target = (self.root / rel).resolve()
-            if self.root not in [target, *target.parents]:
+            # Check that the resolved path is the root itself or strictly inside it.
+            # str.startswith on the string form avoids the /tmp/foo vs /tmp/foobar
+            # false-positive that target.parents membership checks can miss.
+            root_prefix = str(self.root)
+            target_str = str(target)
+            inside = target_str == root_prefix or target_str.startswith(root_prefix + "/")
+            if not inside:
                 raise ValueError("path escapes sandbox root")
             result = {"files": sorted(p.name for p in target.iterdir()) if target.is_dir() else []}
         elif name == "credential":

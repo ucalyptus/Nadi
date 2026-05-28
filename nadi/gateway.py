@@ -24,9 +24,10 @@ class Gateway:
         return route
 
     def send_command(self, session_id: str, command_type: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-        # Gateway is stateless: it writes the durable inbox and performs route lookup.
-        command_id = self.store.enqueue_command(session_id, command_type, payload or {})
+        # Gateway is stateless: validate route before enqueuing so an expired/missing
+        # route raises immediately without orphaning a command in the inbox.
         self.route(session_id)
+        command_id = self.store.enqueue_command(session_id, command_type, payload or {})
         celld = self.broker.celld_for_route(session_id)
         events = celld.consume_commands(session_id)
         return {"command_id": command_id, "events": events}
