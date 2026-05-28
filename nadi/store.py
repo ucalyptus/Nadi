@@ -110,6 +110,25 @@ class Store:
                     created_at REAL NOT NULL,
                     updated_at REAL NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS channels (
+                    id TEXT PRIMARY KEY,
+                    platform TEXT NOT NULL,
+                    channel_id TEXT NOT NULL,
+                    thread_id TEXT NOT NULL DEFAULT '',
+                    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+                    initiator_resource_id TEXT NOT NULL,
+                    metadata TEXT NOT NULL DEFAULT '{}',
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL,
+                    UNIQUE (platform, channel_id, thread_id)
+                );
+                CREATE TABLE IF NOT EXISTS resources (
+                    resource_id TEXT PRIMARY KEY,
+                    platform TEXT NOT NULL,
+                    memory TEXT NOT NULL DEFAULT '{}',
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS audit_log (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     actor TEXT NOT NULL,
@@ -121,13 +140,19 @@ class Store:
                 CREATE INDEX IF NOT EXISTS idx_events_session_sequence ON events (session_id, sequence);
                 CREATE INDEX IF NOT EXISTS idx_command_inbox_pending ON command_inbox (session_id, status, available_at, id);
                 CREATE INDEX IF NOT EXISTS idx_revoked_tokens_expires ON revoked_tokens (expires_at);
+                CREATE INDEX IF NOT EXISTS idx_channels_platform ON channels (platform, channel_id, thread_id);
                 """
             )
-            # Migrate existing databases that predate the claim_token column.
-            try:
-                self.conn.execute("ALTER TABLE command_inbox ADD COLUMN claim_token TEXT")
-            except Exception:
-                pass
+            # Migrations for columns added after initial release.
+            for stmt in [
+                "ALTER TABLE command_inbox ADD COLUMN claim_token TEXT",
+                "ALTER TABLE command_inbox ADD COLUMN actor_resource_id TEXT",
+                "ALTER TABLE events ADD COLUMN actor_resource_id TEXT",
+            ]:
+                try:
+                    self.conn.execute(stmt)
+                except Exception:
+                    pass
             self.conn.commit()
 
     def _json(self, data: Json | None) -> str:
@@ -161,18 +186,18 @@ class Store:
     def get_session(self, session_id: str) -> Json | None:
         return self._row(self.conn.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone())
 
-    def append_event(self, session_id: str, event_type: str, payload: Json | None = None) -> Json:
+    def append_event(self, session_id: str, event_type: str, payload: Json | None = None, actor_resource_id: str | None = None) -> Json:
         # Hold the lock for the entire SELECT-INSERT so no concurrent caller
         # can steal the same sequence number.
         with self._lock:
             cur = self.conn.execute("SELECT COALESCE(MAX(sequence), 0) + 1 FROM events WHERE session_id=?", (session_id,))
             seq = int(cur.fetchone()[0])
             self.conn.execute(
-                "INSERT INTO events(session_id, sequence, event_type, payload, created_at) VALUES(?,?,?,?,?)",
-                (session_id, seq, event_type, self._json(payload), now()),
+                "INSERT INTO events(session_id, sequence, event_type, payload, actor_resource_id, created_at) VALUES(?,?,?,?,?,?)",
+                (session_id, seq, event_type, self._json(payload), actor_resource_id, now()),
             )
             self.conn.commit()
-        return {"session_id": session_id, "sequence": seq, "event_type": event_type, "payload": payload or {}}
+        return {"session_id": session_id, "sequence": seq, "event_type": event_type, "payload": payload or {}, "actor_resource_id": actor_resource_id}
 
     def get_events(self, session_id: str, after: int = 0) -> list[Json]:
         rows = self.conn.execute(
@@ -183,7 +208,7 @@ class Store:
     _MAX_PENDING_COMMANDS = 100
     _MAX_EVENTS_PER_SESSION = 10_000
 
-    def enqueue_command(self, session_id: str, command_type: str, payload: Json | None = None) -> int:
+    def enqueue_command(self, session_id: str, command_type: str, payload: Json | None = None, actor_resource_id: str | None = None) -> int:
         with self._lock:
             pending = self.conn.execute(
                 "SELECT COUNT(*) FROM command_inbox WHERE session_id=? AND status='pending'",
@@ -198,8 +223,8 @@ class Store:
             if event_count >= self._MAX_EVENTS_PER_SESSION:
                 raise ValueError(f"session {session_id} has reached the event limit")
             cur = self.conn.execute(
-                "INSERT INTO command_inbox(session_id, command_type, payload, status, available_at, created_at) VALUES(?,?,?,?,?,?)",
-                (session_id, command_type, self._json(payload), "pending", now(), now()),
+                "INSERT INTO command_inbox(session_id, command_type, payload, actor_resource_id, status, available_at, created_at) VALUES(?,?,?,?,?,?,?)",
+                (session_id, command_type, self._json(payload), actor_resource_id, "pending", now(), now()),
             )
             self.conn.commit()
         return int(cur.lastrowid or 0)
@@ -302,6 +327,58 @@ class Store:
         else:
             rows = self.conn.execute("SELECT * FROM audit_log ORDER BY id").fetchall()
         return [self._row(r) for r in rows]  # type: ignore[list-item]
+
+    # ── Channel routing ──────────────────────────────────────────────────────
+
+    def upsert_channel(self, platform: str, channel_id: str, thread_id: str, session_id: str, initiator_resource_id: str, metadata: Json | None = None) -> str:
+        """Map a platform channel/thread to a session. Returns the internal channel row id."""
+        t = now()
+        with self._lock:
+            existing = self.conn.execute(
+                "SELECT id FROM channels WHERE platform=? AND channel_id=? AND thread_id=?",
+                (platform, channel_id, thread_id),
+            ).fetchone()
+            if existing:
+                self.conn.execute(
+                    "UPDATE channels SET session_id=?, metadata=?, updated_at=? WHERE id=?",
+                    (session_id, self._json(metadata), t, existing["id"]),
+                )
+                cid = existing["id"]
+            else:
+                cid = str(uuid.uuid4())
+                self.conn.execute(
+                    "INSERT INTO channels(id, platform, channel_id, thread_id, session_id, initiator_resource_id, metadata, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                    (cid, platform, channel_id, thread_id, session_id, initiator_resource_id, self._json(metadata), t, t),
+                )
+            self.conn.commit()
+        return cid
+
+    def get_channel(self, platform: str, channel_id: str, thread_id: str = "") -> Json | None:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT * FROM channels WHERE platform=? AND channel_id=? AND thread_id=?",
+                (platform, channel_id, thread_id),
+            ).fetchone()
+        return self._row(row)
+
+    # ── Resource (per-user) memory ───────────────────────────────────────────
+
+    def get_resource_memory(self, resource_id: str) -> Json:
+        row = self.conn.execute("SELECT memory FROM resources WHERE resource_id=?", (resource_id,)).fetchone()
+        if row is None:
+            return {}
+        return json.loads(row["memory"])
+
+    def set_resource_memory(self, resource_id: str, memory: Json, platform: str = "unknown") -> None:
+        t = now()
+        with self._lock:
+            self.conn.execute(
+                """INSERT INTO resources(resource_id, platform, memory, created_at, updated_at)
+                   VALUES(?,?,?,?,?)
+                   ON CONFLICT(resource_id) DO UPDATE SET memory=excluded.memory, updated_at=excluded.updated_at""",
+                (resource_id, platform, self._json(memory), t, t),
+            )
+            self.conn.commit()
 
     def revoke_token(self, jti: str, expires_at: float) -> None:
         with self._lock:

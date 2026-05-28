@@ -71,6 +71,50 @@ class NadiMVPTests(unittest.TestCase):
         self.assertIn("execute_tool", actions)
 
 
+    def test_multi_channel_session_routing(self):
+        stack = local_stack(":memory:")
+        gw = stack["gateway"]
+        # First call creates a new session
+        r1 = gw.get_or_create_channel_session("discord", "ch-1", "thread-1", initiator_resource_id="discord:user1")
+        self.assertTrue(r1["created"])
+        sid = r1["session_id"]
+        # Second call with same platform/channel/thread returns the existing session
+        r2 = gw.get_or_create_channel_session("discord", "ch-1", "thread-1", initiator_resource_id="discord:user2")
+        self.assertFalse(r2["created"])
+        self.assertEqual(r2["session_id"], sid)
+        # Different thread_id creates a new session (separate conversation)
+        r3 = gw.get_or_create_channel_session("discord", "ch-1", "thread-2", initiator_resource_id="discord:user1")
+        self.assertTrue(r3["created"])
+        self.assertNotEqual(r3["session_id"], sid)
+
+    def test_actor_resource_id_on_commands_and_events(self):
+        stack = local_stack(":memory:")
+        gw = stack["gateway"]
+        sid = gw.create_session("t1")["session_id"]
+        gw.send_command(sid, "echo", {"text": "hello"}, actor_resource_id="slack:U12345")
+        events = gw.get_session_events(sid)
+        # The echo command.received event should carry the actor
+        command_events = [e for e in events if e["event_type"] == "command.received"]
+        self.assertTrue(len(command_events) > 0)
+        # Check command_inbox stored actor_resource_id
+        store = stack["store"]
+        rows = store.conn.execute("SELECT actor_resource_id FROM command_inbox WHERE session_id=?", (sid,)).fetchall()
+        actors = [r[0] for r in rows]
+        self.assertIn("slack:U12345", actors)
+
+    def test_resource_memory_scoped_per_user(self):
+        store = Store(":memory:")
+        # Two different users have isolated memory
+        store.set_resource_memory("discord:user-A", {"mood": "happy"}, platform="discord")
+        store.set_resource_memory("discord:user-B", {"mood": "grumpy"}, platform="discord")
+        self.assertEqual(store.get_resource_memory("discord:user-A")["mood"], "happy")
+        self.assertEqual(store.get_resource_memory("discord:user-B")["mood"], "grumpy")
+        # Overwrite is idempotent
+        store.set_resource_memory("discord:user-A", {"mood": "ecstatic"}, platform="discord")
+        self.assertEqual(store.get_resource_memory("discord:user-A")["mood"], "ecstatic")
+        # Unknown resource returns empty dict
+        self.assertEqual(store.get_resource_memory("discord:nobody"), {})
+
     def test_token_revocation_blocks_tool_execution(self):
         stack = local_stack(":memory:")
         gw = stack["gateway"]

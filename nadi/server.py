@@ -50,9 +50,24 @@ class NadiHandler(BaseHTTPRequestHandler):
             return _json(self, 413, {"error": str(exc)})
         if path == "/sessions":
             return _json(self, 201, self.gateway.create_session(body.get("tenant_id", "local"), body.get("metadata") or {}))
+        if path == "/channels":
+            # Idempotent channel→session routing for multi-user platforms.
+            return _json(self, 200, self.gateway.get_or_create_channel_session(
+                platform=body.get("platform", ""),
+                channel_id=body.get("channel_id", ""),
+                thread_id=body.get("thread_id", ""),
+                tenant_id=body.get("tenant_id", "local"),
+                initiator_resource_id=body.get("initiator_resource_id", ""),
+                metadata=body.get("metadata") or {},
+            ))
         parts = path.strip("/").split("/")
         if len(parts) == 3 and parts[0] == "sessions" and parts[2] == "commands":
-            return _json(self, 202, self.gateway.send_command(parts[1], body.get("type", body.get("command_type", "echo")), body.get("payload") or {}))
+            return _json(self, 202, self.gateway.send_command(
+                parts[1],
+                body.get("type", body.get("command_type", "echo")),
+                body.get("payload") or {},
+                actor_resource_id=body.get("actor_resource_id"),
+            ))
         _json(self, 404, {"error": "not found"})
 
 
