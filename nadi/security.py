@@ -6,7 +6,11 @@ import hashlib
 import hmac
 import json
 import time
-from typing import Any
+import uuid
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .store import Store
 
 _MAX_TTL_SECONDS = 86400  # 24 hours hard ceiling
 
@@ -31,13 +35,14 @@ class SessionJWT:
         # Enforce a hard ceiling on token lifetime; negative values are allowed
         # (they produce already-expired tokens, useful in tests and deliberate short-circuits).
         ttl_seconds = min(ttl_seconds, _MAX_TTL_SECONDS)
+        exp = int(time.time()) + ttl_seconds
         header = {"alg": "HS256", "typ": "JWT"}
-        payload = {"sub": subject, "sid": session_id, "scope": scope, "exp": int(time.time()) + ttl_seconds}
+        payload = {"sub": subject, "sid": session_id, "scope": scope, "exp": exp, "jti": str(uuid.uuid4())}
         body = f"{_b64e(json.dumps(header, separators=(',', ':')).encode())}.{_b64e(json.dumps(payload, separators=(',', ':')).encode())}"
         sig = hmac.new(self.secret, body.encode(), hashlib.sha256).digest()
         return f"{body}.{_b64e(sig)}"
 
-    def verify(self, token: str, session_id: str, scope: str) -> dict[str, Any]:
+    def verify(self, token: str, session_id: str, scope: str, store: "Store | None" = None) -> dict[str, Any]:
         try:
             head, payload_b64, sig = token.split(".")
         except ValueError as exc:
@@ -70,4 +75,8 @@ class SessionJWT:
         scopes = set(str(data.get("scope", "")).split())
         if scope not in scopes and data.get("scope") != "*":
             raise JWTError("missing scope")
+        if store is not None:
+            jti = data.get("jti")
+            if jti and store.is_token_revoked(jti):
+                raise JWTError("token revoked")
         return data

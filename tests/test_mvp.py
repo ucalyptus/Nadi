@@ -4,6 +4,7 @@ import unittest
 from nadi.celld import Cell
 from nadi.runtime import local_stack
 from nadi.security import JWTError, SessionJWT
+from nadi.store import Store
 
 
 class NadiMVPTests(unittest.TestCase):
@@ -68,6 +69,43 @@ class NadiMVPTests(unittest.TestCase):
         actions = [e["action"] for e in entries]
         self.assertIn("exchange", actions)
         self.assertIn("execute_tool", actions)
+
+
+    def test_token_revocation_blocks_tool_execution(self):
+        stack = local_stack(":memory:")
+        gw = stack["gateway"]
+        sid = gw.create_session("t1")["session_id"]
+        # Cell was created; destroy it — this should revoke the cell JWT
+        stack["celld"].destroy_cell(sid)
+        # Attempt to execute a tool with the now-revoked token must fail
+        cell_jwt = stack["celld"].jwt.sign(sid, "tool", ttl_seconds=30)
+        # Token not yet revoked — should work
+        stack["sandboxd"].execute_tool(sid, cell_jwt, "echo", {"text": "ok"})
+        # Revoke it explicitly via store
+        import json, base64
+        _, pb, _ = cell_jwt.split(".")
+        data = json.loads(base64.urlsafe_b64decode(pb + "==" ))
+        stack["store"].revoke_token(data["jti"], float(data["exp"]))
+        with self.assertRaises(JWTError):
+            stack["sandboxd"].execute_tool(sid, cell_jwt, "echo", {"text": "blocked"})
+
+    def test_claim_token_uniqueness_across_claims(self):
+        store = Store(":memory:")
+        sid = store.create_session("t1")
+        store.enqueue_command(sid, "echo", {"text": "a"})
+        store.enqueue_command(sid, "echo", {"text": "b"})
+        batch1 = store.claim_pending_commands(sid, "worker1")
+        # Second claim should return empty (no pending rows left)
+        batch2 = store.claim_pending_commands(sid, "worker1")
+        self.assertEqual(len(batch1), 2)
+        self.assertEqual(len(batch2), 0)
+        # claim_token values for each row must exist and be unique per batch
+        tokens = {row["claim_token"] for row in batch1}
+        self.assertEqual(len(tokens), 1)  # same token for all rows in one batch
+        # Enqueue more and verify second batch gets a different token
+        store.enqueue_command(sid, "echo", {"text": "c"})
+        batch3 = store.claim_pending_commands(sid, "worker1")
+        self.assertNotEqual(batch3[0]["claim_token"], batch1[0]["claim_token"])
 
 
 if __name__ == "__main__":

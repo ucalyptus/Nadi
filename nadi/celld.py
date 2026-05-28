@@ -1,12 +1,14 @@
 """Cell host daemon and reconstructable session cells."""
 from __future__ import annotations
 
+import base64
+import json
 import threading
 from dataclasses import dataclass, field
 from typing import Any
 
 from .runtime import Runtime
-from .security import SessionJWT
+from .security import SessionJWT, _b64d
 from .store import Store
 
 
@@ -71,6 +73,22 @@ class Celld:
                 emitted.append(self.append_event(session_id, event_type, payload))
             self.store.complete_command(cmd["id"])
         return emitted
+
+    def destroy_cell(self, session_id: str) -> None:
+        with self._lock:
+            cell = self.cells.pop(session_id, None)
+        if cell is None:
+            return
+        try:
+            _, payload_b64, _ = cell.jwt.split(".")
+            data = json.loads(_b64d(payload_b64))
+            jti = data.get("jti")
+            exp = float(data.get("exp", 0))
+            if jti:
+                self.store.revoke_token(jti, exp)
+        except Exception:
+            pass
+        self.store.update_session_status(session_id, "stopped")
 
     def _apply(self, cell: Cell, event_type: str, payload: dict[str, Any]) -> None:
         if event_type in {"assistant.message", "model.response"}:

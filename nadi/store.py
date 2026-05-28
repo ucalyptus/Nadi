@@ -67,9 +67,15 @@ class Store:
                     status TEXT NOT NULL DEFAULT 'pending',
                     available_at REAL NOT NULL,
                     claimed_by TEXT,
+                    claim_token TEXT,
                     claimed_at REAL,
                     completed_at REAL,
                     created_at REAL NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS revoked_tokens (
+                    jti TEXT PRIMARY KEY,
+                    expires_at REAL NOT NULL,
+                    revoked_at REAL NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS cell_hosts (
                     id TEXT PRIMARY KEY,
@@ -114,8 +120,14 @@ class Store:
                 );
                 CREATE INDEX IF NOT EXISTS idx_events_session_sequence ON events (session_id, sequence);
                 CREATE INDEX IF NOT EXISTS idx_command_inbox_pending ON command_inbox (session_id, status, available_at, id);
+                CREATE INDEX IF NOT EXISTS idx_revoked_tokens_expires ON revoked_tokens (expires_at);
                 """
             )
+            # Migrate existing databases that predate the claim_token column.
+            try:
+                self.conn.execute("ALTER TABLE command_inbox ADD COLUMN claim_token TEXT")
+            except Exception:
+                pass
             self.conn.commit()
 
     def _json(self, data: Json | None) -> str:
@@ -193,19 +205,22 @@ class Store:
         return int(cur.lastrowid or 0)
 
     def claim_pending_commands(self, session_id: str, claimed_by: str) -> list[Json]:
-        # Atomic claim: UPDATE first, then SELECT only the rows we just claimed.
-        # This prevents two concurrent workers from processing the same commands.
+        # Generate a per-invocation claim_token so that rows claimed in this call
+        # are uniquely identified even across multiple processes sharing the same
+        # host_id. The SELECT scopes to this token rather than host_id, preventing
+        # a restarted worker from re-processing rows claimed by a prior instance.
+        claim_token = str(uuid.uuid4())
         t = now()
         with self._lock:
             self.conn.execute(
-                "UPDATE command_inbox SET status='claimed', claimed_by=?, claimed_at=? "
+                "UPDATE command_inbox SET status='claimed', claimed_by=?, claim_token=?, claimed_at=? "
                 "WHERE session_id=? AND status='pending'",
-                (claimed_by, t, session_id),
+                (claimed_by, claim_token, t, session_id),
             )
             self.conn.commit()
             rows = self.conn.execute(
-                "SELECT * FROM command_inbox WHERE session_id=? AND status='claimed' AND claimed_by=? ORDER BY id",
-                (session_id, claimed_by),
+                "SELECT * FROM command_inbox WHERE claim_token=? AND status='claimed' ORDER BY id",
+                (claim_token,),
             ).fetchall()
         return [self._row(r) for r in rows]  # type: ignore[list-item]
 
@@ -265,11 +280,14 @@ class Store:
         return token
 
     def get_route(self, session_id: str) -> Json | None:
-        row = self.conn.execute("""
-            SELECT l.*, h.host_id, h.address, h.zone FROM session_leases l
-            JOIN cell_hosts h ON h.id = l.cell_host_id
-            WHERE l.session_id=? AND l.status='active' AND l.expires_at>?
-        """, (session_id, now())).fetchone()
+        # Hold the lock so this read is serialised with concurrent writes,
+        # preventing a stale WAL snapshot from hiding a just-committed lease.
+        with self._lock:
+            row = self.conn.execute("""
+                SELECT l.*, h.host_id, h.address, h.zone FROM session_leases l
+                JOIN cell_hosts h ON h.id = l.cell_host_id
+                WHERE l.session_id=? AND l.status='active' AND l.expires_at>?
+            """, (session_id, now())).fetchone()
         return self._row(row)
 
     def audit(self, actor: str, action: str, session_id: str | None = None, payload: Json | None = None) -> int:
@@ -284,3 +302,21 @@ class Store:
         else:
             rows = self.conn.execute("SELECT * FROM audit_log ORDER BY id").fetchall()
         return [self._row(r) for r in rows]  # type: ignore[list-item]
+
+    def revoke_token(self, jti: str, expires_at: float) -> None:
+        with self._lock:
+            self.conn.execute(
+                "INSERT OR IGNORE INTO revoked_tokens(jti, expires_at, revoked_at) VALUES(?,?,?)",
+                (jti, expires_at, now()),
+            )
+            self.conn.commit()
+
+    def is_token_revoked(self, jti: str) -> bool:
+        # Opportunistically purge tokens whose original expiry has passed —
+        # once they'd be rejected by the exp check anyway, the revocation row
+        # is redundant.
+        t = now()
+        with self._lock:
+            self.conn.execute("DELETE FROM revoked_tokens WHERE expires_at < ?", (t,))
+            row = self.conn.execute("SELECT 1 FROM revoked_tokens WHERE jti=?", (jti,)).fetchone()
+        return row is not None

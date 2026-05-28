@@ -16,7 +16,7 @@ class CredentialsProxy:
         self.jwt = jwt
 
     def exchange(self, session_id: str, token: str, audience: str = "tool") -> dict[str, Any]:
-        self.jwt.verify(token, session_id, "tool")
+        self.jwt.verify(token, session_id, "tool", store=self.store)
         cred = {"access_token": f"fake-{session_id[:8]}-{audience}", "audience": audience}
         self.store.audit("credentials-proxy", "exchange", session_id, {"audience": audience})
         return cred
@@ -31,7 +31,7 @@ class Sandboxd:
         self.tool_calls = 0
 
     def execute_tool(self, session_id: str, token: str, name: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
-        self.jwt.verify(token, session_id, "tool")
+        self.jwt.verify(token, session_id, "tool", store=self.store)
         args = args or {}
         self.tool_calls += 1
         if name == "echo":
