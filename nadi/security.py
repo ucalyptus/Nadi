@@ -22,7 +22,7 @@ def _b64d(data: str) -> bytes:
 
 
 class SessionJWT:
-    def __init__(self, secret: str = "local-openriver-secret"):
+    def __init__(self, secret: str = "local-nadi-secret"):
         self.secret = secret.encode()
 
     def sign(self, session_id: str, scope: str, ttl_seconds: int = 300, subject: str = "cell") -> str:

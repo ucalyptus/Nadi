@@ -25,7 +25,7 @@ class Runtime:
 
 
 def local_stack(db_path: str = ":memory:"):
-    """Build an all-in-one local OpenRiver stack for demos/tests."""
+    """Build an all-in-one local Nadi stack for demos/tests."""
     from .broker import Broker
     from .celld import Celld
     from .gateway import Gateway

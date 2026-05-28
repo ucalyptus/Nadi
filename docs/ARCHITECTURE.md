@@ -1,6 +1,6 @@
-# OpenRiver Architecture
+# Nadi Architecture
 
-OpenRiver is a four-tier platform for durable, session-based agent workloads. The core design principle is that **Postgres is the sole durable source of truth**. Runtime processes are replaceable; session state is reconstructed from the database event log.
+Nadi is a four-tier platform for durable, session-based agent workloads. The core design principle is that **Postgres is the sole durable source of truth**. Runtime processes are replaceable; session state is reconstructed from the database event log.
 
 ## Tiers
 
@@ -26,7 +26,7 @@ OpenRiver is a four-tier platform for durable, session-based agent workloads. Th
 - Manages session cells as systemd transient units.
 - Session cells contain:
   - Go Runtime: event sequencer, tool mediation, ACP Unix socket, inbox consumer.
-  - Pi Harness: agent loop, Aquifer/OpenRiver extension, side-channel tools, model calls.
+  - Pi Harness: agent loop, Aquifer/Nadi extension, side-channel tools, model calls.
 
 ### 4. Sandboxd / Sandbox-host
 

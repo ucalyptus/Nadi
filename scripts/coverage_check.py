@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stdlib coverage gate using trace.
 
-Runs unittest discovery under trace and fails when openriver/*.py line coverage is
+Runs unittest discovery under trace and fails when nadi/*.py line coverage is
 below the requested threshold. This intentionally avoids third-party packages so
 fresh clones can verify coverage with only Python.
 """
@@ -14,7 +14,7 @@ import trace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "openriver"
+PACKAGE = ROOT / "nadi"
 
 
 def executable_lines(path: Path) -> set[int]:

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package aquifer.v1;
 
-option go_package = "github.com/openriver/openriver/proto/aquifer/v1;aquiferv1";
+option go_package = "github.com/nadi/nadi/proto/aquifer/v1;aquiferv1";
 
 service GatewayService {
   rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse);

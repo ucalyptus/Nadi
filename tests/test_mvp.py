@@ -1,12 +1,12 @@
 import time
 import unittest
 
-from openriver.celld import Cell
-from openriver.runtime import local_stack
-from openriver.security import JWTError, SessionJWT
+from nadi.celld import Cell
+from nadi.runtime import local_stack
+from nadi.security import JWTError, SessionJWT
 
 
-class OpenRiverMVPTests(unittest.TestCase):
+class NadiMVPTests(unittest.TestCase):
     def test_e2e_lifecycle(self):
         stack = local_stack(":memory:")
         gw = stack["gateway"]

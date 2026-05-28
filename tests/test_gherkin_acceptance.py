@@ -3,9 +3,9 @@ import re
 import unittest
 from pathlib import Path
 
-from openriver.runtime import local_stack
+from nadi.runtime import local_stack
 
-FEATURE = Path(__file__).resolve().parents[1] / "features" / "openriver_acceptance.feature"
+FEATURE = Path(__file__).resolve().parents[1] / "features" / "nadi_acceptance.feature"
 
 
 class MiniGherkinRunner(unittest.TestCase):
@@ -26,7 +26,7 @@ class MiniGherkinRunner(unittest.TestCase):
                     self.run_step(ctx, step)
 
     def run_step(self, ctx, step):
-        if step == "Given a local OpenRiver stack":
+        if step == "Given a local Nadi stack":
             ctx["stack"] = local_stack(":memory:")
             ctx["gateway"] = ctx["stack"]["gateway"]
             return

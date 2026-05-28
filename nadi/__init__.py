@@ -1,4 +1,4 @@
-"""OpenRiver local stdlib MVP."""
+"""Nadi local stdlib MVP."""
 
 __all__ = [
     "broker",

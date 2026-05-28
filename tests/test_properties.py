@@ -5,10 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from openriver.runtime import local_stack
-from openriver.sandboxd import Sandboxd
-from openriver.security import JWTError, SessionJWT
-from openriver.store import Store
+from nadi.runtime import local_stack
+from nadi.sandboxd import Sandboxd
+from nadi.security import JWTError, SessionJWT
+from nadi.store import Store
 
 
 class PropertyStyleTests(unittest.TestCase):

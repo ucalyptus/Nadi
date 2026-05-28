@@ -5,17 +5,17 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
-import openriver
-from openriver.cli import demo, main
-from openriver.gateway import Gateway
-from openriver.broker import Broker
-from openriver.store import Store
+import nadi
+from nadi.cli import demo, main
+from nadi.gateway import Gateway
+from nadi.broker import Broker
+from nadi.store import Store
 
 
 class CLIAndStoreTests(unittest.TestCase):
     def test_package_metadata_exports_modules(self):
-        self.assertIn("gateway", openriver.__all__)
-        self.assertTrue(openriver.__version__.startswith("0.1.0"))
+        self.assertIn("gateway", nadi.__all__)
+        self.assertTrue(nadi.__version__.startswith("0.1.0"))
 
     def test_cli_demo_function_and_main_emit_json(self):
         with tempfile.TemporaryDirectory() as td:

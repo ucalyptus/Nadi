@@ -1,4 +1,4 @@
-"""SQLite persistence for the local OpenRiver MVP.
+"""SQLite persistence for the local Nadi MVP.
 
 The schema intentionally mirrors the Postgres concepts from migrations/ while
 remaining self-contained for local development.

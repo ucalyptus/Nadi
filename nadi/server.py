@@ -19,7 +19,7 @@ def _json(handler: BaseHTTPRequestHandler, status: int, body: Any) -> None:
     handler.wfile.write(raw)
 
 
-class OpenRiverHandler(BaseHTTPRequestHandler):
+class NadiHandler(BaseHTTPRequestHandler):
     gateway: ClassVar[Gateway]
 
     def log_message(self, format: str, *args: Any) -> None:  # quiet in tests/demos
@@ -51,8 +51,8 @@ class OpenRiverHandler(BaseHTTPRequestHandler):
 
 def make_server(db_path: str, host: str = "127.0.0.1", port: int = 8080) -> ThreadingHTTPServer:
     stack = local_stack(db_path)
-    OpenRiverHandler.gateway = stack["gateway"]
-    return ThreadingHTTPServer((host, port), OpenRiverHandler)
+    NadiHandler.gateway = stack["gateway"]
+    return ThreadingHTTPServer((host, port), NadiHandler)
 
 
 def serve(db_path: str, host: str = "127.0.0.1", port: int = 8080) -> None:

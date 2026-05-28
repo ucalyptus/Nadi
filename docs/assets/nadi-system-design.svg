@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="900" viewBox="0 0 1280 900" role="img" aria-labelledby="title desc">
-  <title id="title">OpenRiver System Design and Request Lifecycle</title>
+  <title id="title">Nadi System Design and Request Lifecycle</title>
   <desc id="desc">System design diagram showing session creation, command ingestion, runtime processing, direct sandbox tool execution, credential exchange, event persistence, reconstruction, and streaming response.</desc>
   <defs>
     <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0 L0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/></pattern>
@@ -15,7 +15,7 @@
     </style>
   </defs>
   <rect class="bg" width="1280" height="900"/><rect class="grid" width="1280" height="900" opacity=".7"/>
-  <text x="40" y="48" class="title">OpenRiver System Design</text>
+  <text x="40" y="48" class="title">Nadi System Design</text>
   <text x="40" y="72" class="subtitle">Request lifecycle, persistence model, and recovery invariants</text>
 
   <rect x="30" y="105" width="1220" height="700" rx="16" class="boundary"/><text x="50" y="128" class="tiny">numbered path: create session → command → runtime → sandbox → event log → stream/reconstruct</text>

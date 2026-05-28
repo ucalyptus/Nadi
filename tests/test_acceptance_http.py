@@ -5,7 +5,7 @@ import unittest
 import urllib.error
 import urllib.request
 
-from openriver.server import make_server
+from nadi.server import make_server
 
 
 class HTTPAcceptanceTests(unittest.TestCase):

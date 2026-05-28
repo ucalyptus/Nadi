@@ -1,4 +1,4 @@
-# OpenRiver Roadmap
+# Nadi Roadmap
 
 ## Phase 0 — Foundations
 

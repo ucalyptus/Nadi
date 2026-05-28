@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Small deterministic mutation test gate for OpenRiver.
+"""Small deterministic mutation test gate for Nadi.
 
 This is not a full mutation-testing framework; it is a fast stdlib gate that
 applies targeted semantic mutants to critical invariants and requires the test
@@ -29,13 +29,13 @@ class Mutant:
 
 
 MUTANTS = [
-    Mutant("uppercase_tool_lowercases", "openriver/sandboxd.py", 'str(args.get("text", "")).upper()', 'str(args.get("text", "")).lower()'),
-    Mutant("sandbox_escape_allows_parent", "openriver/sandboxd.py", 'if self.root not in [target, *target.parents]:', 'if False and self.root not in [target, *target.parents]:'),
-    Mutant("jwt_allows_wrong_session", "openriver/security.py", 'if data.get("sid") != session_id:', 'if False and data.get("sid") != session_id:'),
-    Mutant("jwt_allows_missing_scope", "openriver/security.py", 'if scope not in scopes and data.get("scope") != "*":', 'if False and scope not in scopes and data.get("scope") != "*":'),
-    Mutant("model_prefix_changed", "openriver/runtime.py", 'f"deterministic-model:{prompt}"', 'f"mutated-model:{prompt}"'),
-    Mutant("event_sequence_starts_at_zero", "openriver/store.py", 'SELECT COALESCE(MAX(sequence), 0) + 1 FROM events WHERE session_id=?', 'SELECT COALESCE(MAX(sequence), 0) FROM events WHERE session_id=?'),
-    Mutant("broker_counts_tool_path", "openriver/broker.py", 'self.tool_path_calls = 0  # tests assert this stays zero for tool execution', 'self.tool_path_calls = 1  # mutated: pretend broker entered tool path'),
+    Mutant("uppercase_tool_lowercases", "nadi/sandboxd.py", 'str(args.get("text", "")).upper()', 'str(args.get("text", "")).lower()'),
+    Mutant("sandbox_escape_allows_parent", "nadi/sandboxd.py", 'if self.root not in [target, *target.parents]:', 'if False and self.root not in [target, *target.parents]:'),
+    Mutant("jwt_allows_wrong_session", "nadi/security.py", 'if data.get("sid") != session_id:', 'if False and data.get("sid") != session_id:'),
+    Mutant("jwt_allows_missing_scope", "nadi/security.py", 'if scope not in scopes and data.get("scope") != "*":', 'if False and scope not in scopes and data.get("scope") != "*":'),
+    Mutant("model_prefix_changed", "nadi/runtime.py", 'f"deterministic-model:{prompt}"', 'f"mutated-model:{prompt}"'),
+    Mutant("event_sequence_starts_at_zero", "nadi/store.py", 'SELECT COALESCE(MAX(sequence), 0) + 1 FROM events WHERE session_id=?', 'SELECT COALESCE(MAX(sequence), 0) FROM events WHERE session_id=?'),
+    Mutant("broker_counts_tool_path", "nadi/broker.py", 'self.tool_path_calls = 0  # tests assert this stays zero for tool execution', 'self.tool_path_calls = 1  # mutated: pretend broker entered tool path'),
 ]
 
 
@@ -77,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
     killed = 0
     survivors: list[str] = []
     for mutant in MUTANTS:
-        with tempfile.TemporaryDirectory(prefix=f"openriver-mutant-{mutant.name}-") as td:
+        with tempfile.TemporaryDirectory(prefix=f"nadi-mutant-{mutant.name}-") as td:
             repo = copy_repo(Path(td))
             apply_mutant(repo, mutant)
             result = run_tests(repo)

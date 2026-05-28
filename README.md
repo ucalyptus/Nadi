@@ -1,12 +1,12 @@
-# OpenRiver
+# Nadi
 
-OpenRiver is a runnable local MVP for a Postgres-centric, session-based agent workload platform. It is based on the Aquifer system build plan: a four-tier architecture where Postgres is the durable source of truth for all session state.
+Nadi is a runnable local MVP for a Postgres-centric, session-based agent workload platform. It is based on the Aquifer system build plan: a four-tier architecture where Postgres is the durable source of truth for all session state.
 
 > Status: local MVP plus planning docs. The repo now includes a runnable, self-contained Python stdlib implementation that demonstrates the Aquifer four-tier architecture on SQLite for local development.
 
 ## System summary
 
-OpenRiver replaces an in-memory/container-pool style session runtime with a four-tier platform for cloud VM fleets:
+Nadi replaces an in-memory/container-pool style session runtime with a four-tier platform for cloud VM fleets:
 
 - **Gateway** (`gateway/`): stateless public edge for auth, REST, ACP edge, and SSE.
 - **Broker** (`broker/`): control-plane registry and placement service; never in the session or tool-call data path.
@@ -18,11 +18,11 @@ OpenRiver replaces an in-memory/container-pool style session runtime with a four
 
 ### Four-tier architecture diagram
 
-![OpenRiver four-tier architecture](docs/assets/openriver-architecture.svg)
+![Nadi four-tier architecture](docs/assets/nadi-architecture.svg)
 
 ### System design / request lifecycle diagram
 
-![OpenRiver system design and request lifecycle](docs/assets/openriver-system-design.svg)
+![Nadi system design and request lifecycle](docs/assets/nadi-system-design.svg)
 
 The diagrams above are checked into `docs/assets/` as SVG files so they render directly in GitHub and remain editable as code.
 
@@ -53,7 +53,7 @@ flowchart LR
 ## Repository layout
 
 ```text
-OpenRiver/
+Nadi/
 ├── proto/                  # gRPC / API definitions
 ├── gateway/                # Tier 1 — stateless edge
 ├── broker/                 # Tier 2 — control plane
@@ -64,7 +64,7 @@ OpenRiver/
 │   ├── credentials-proxy/
 │   └── gitd/
 ├── migrations/             # Postgres schema migrations
-├── openriver/              # Runnable local MVP implementation
+├── nadi/              # Runnable local MVP implementation
 ├── tests/                  # unittest coverage for lifecycle/security invariants
 ├── infra/                  # IaC placeholders
 ├── docs/                   # Architecture, roadmap, original plan
@@ -91,14 +91,14 @@ The local MVP uses only the Python standard library. It runs Gateway, Broker, Ce
 Run the end-to-end demo:
 
 ```bash
-cd /home/ec2-user/OpenRiver
-python -m openriver.cli demo --db /tmp/openriver.db
+cd /home/ec2-user/Nadi
+python -m nadi.cli demo --db /tmp/nadi.db
 ```
 
 Run the HTTP API:
 
 ```bash
-python -m openriver.cli serve --db /tmp/openriver.db --host 127.0.0.1 --port 8080
+python -m nadi.cli serve --db /tmp/nadi.db --host 127.0.0.1 --port 8080
 ```
 
 Example API calls:
@@ -107,7 +107,7 @@ Example API calls:
 curl http://127.0.0.1:8080/healthz
 curl -X POST http://127.0.0.1:8080/sessions -d '{"tenant_id":"demo"}'
 curl -X POST http://127.0.0.1:8080/sessions/$SESSION_ID/commands \
-  -d '{"type":"tool","payload":{"name":"uppercase","args":{"text":"openriver"}}}'
+  -d '{"type":"tool","payload":{"name":"uppercase","args":{"text":"nadi"}}}'
 curl http://127.0.0.1:8080/sessions/$SESSION_ID/events
 ```
 
@@ -140,7 +140,7 @@ Test suite layers:
 - Unit and integration tests: `tests/test_mvp.py`
 - Property-style randomized tests: `tests/test_properties.py`
 - HTTP acceptance tests: `tests/test_acceptance_http.py`
-- Gherkin acceptance criteria: `features/openriver_acceptance.feature` executed by `tests/test_gherkin_acceptance.py`
+- Gherkin acceptance criteria: `features/nadi_acceptance.feature` executed by `tests/test_gherkin_acceptance.py`
 - Mutation gate: `scripts/mutation_test.py`
 - DRY analysis: `scripts/dry_analysis.py` with the latest report in `docs/DRY_ANALYSIS.md`
 
