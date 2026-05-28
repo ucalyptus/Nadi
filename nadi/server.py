@@ -9,6 +9,8 @@ from urllib.parse import urlparse
 from .gateway import Gateway
 from .runtime import local_stack
 
+_MAX_BODY_BYTES = 1 * 1024 * 1024  # 1 MB hard limit
+
 
 def _json(handler: BaseHTTPRequestHandler, status: int, body: Any) -> None:
     raw = json.dumps(body).encode()
@@ -27,6 +29,8 @@ class NadiHandler(BaseHTTPRequestHandler):
 
     def _body(self) -> dict[str, Any]:
         n = int(self.headers.get("content-length", "0"))
+        if n > _MAX_BODY_BYTES:
+            raise ValueError(f"request body too large ({n} > {_MAX_BODY_BYTES})")
         return json.loads(self.rfile.read(n) or b"{}")
 
     def do_GET(self) -> None:
@@ -40,7 +44,10 @@ class NadiHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
-        body = self._body()
+        try:
+            body = self._body()
+        except ValueError as exc:
+            return _json(self, 413, {"error": str(exc)})
         if path == "/sessions":
             return _json(self, 201, self.gateway.create_session(body.get("tenant_id", "local"), body.get("metadata") or {}))
         parts = path.strip("/").split("/")

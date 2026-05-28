@@ -8,6 +8,8 @@ import json
 import time
 from typing import Any
 
+_MAX_TTL_SECONDS = 86400  # 24 hours hard ceiling
+
 
 class JWTError(ValueError):
     pass
@@ -26,6 +28,9 @@ class SessionJWT:
         self.secret = secret.encode()
 
     def sign(self, session_id: str, scope: str, ttl_seconds: int = 300, subject: str = "cell") -> str:
+        # Enforce a hard ceiling on token lifetime; negative values are allowed
+        # (they produce already-expired tokens, useful in tests and deliberate short-circuits).
+        ttl_seconds = min(ttl_seconds, _MAX_TTL_SECONDS)
         header = {"alg": "HS256", "typ": "JWT"}
         payload = {"sub": subject, "sid": session_id, "scope": scope, "exp": int(time.time()) + ttl_seconds}
         body = f"{_b64e(json.dumps(header, separators=(',', ':')).encode())}.{_b64e(json.dumps(payload, separators=(',', ':')).encode())}"
@@ -34,13 +39,30 @@ class SessionJWT:
 
     def verify(self, token: str, session_id: str, scope: str) -> dict[str, Any]:
         try:
-            head, payload, sig = token.split(".")
+            head, payload_b64, sig = token.split(".")
         except ValueError as exc:
             raise JWTError("malformed token") from exc
-        expected = _b64e(hmac.new(self.secret, f"{head}.{payload}".encode(), hashlib.sha256).digest())
+
+        # Validate algorithm before anything else — rejects alg:none and other
+        # unexpected algorithms even though the HMAC comparison would also catch
+        # a forged empty signature (defence in depth).
+        try:
+            header_data = json.loads(_b64d(head))
+        except Exception as exc:
+            raise JWTError("malformed header") from exc
+        if header_data.get("alg") != "HS256":
+            raise JWTError("unsupported algorithm")
+
+        # Constant-time signature check.
+        expected = _b64e(hmac.new(self.secret, f"{head}.{payload_b64}".encode(), hashlib.sha256).digest())
         if not hmac.compare_digest(expected, sig):
             raise JWTError("bad signature")
-        data = json.loads(_b64d(payload))
+
+        try:
+            data = json.loads(_b64d(payload_b64))
+        except Exception as exc:
+            raise JWTError("malformed payload") from exc
+
         if data.get("exp", 0) < int(time.time()):
             raise JWTError("token expired")
         if data.get("sid") != session_id:

@@ -168,8 +168,23 @@ class Store:
         ).fetchall()
         return [self._row(r) for r in rows]  # type: ignore[list-item]
 
+    _MAX_PENDING_COMMANDS = 100
+    _MAX_EVENTS_PER_SESSION = 10_000
+
     def enqueue_command(self, session_id: str, command_type: str, payload: Json | None = None) -> int:
         with self._lock:
+            pending = self.conn.execute(
+                "SELECT COUNT(*) FROM command_inbox WHERE session_id=? AND status='pending'",
+                (session_id,),
+            ).fetchone()[0]
+            if pending >= self._MAX_PENDING_COMMANDS:
+                raise ValueError(f"session {session_id} has too many pending commands")
+            event_count = self.conn.execute(
+                "SELECT COUNT(*) FROM events WHERE session_id=?",
+                (session_id,),
+            ).fetchone()[0]
+            if event_count >= self._MAX_EVENTS_PER_SESSION:
+                raise ValueError(f"session {session_id} has reached the event limit")
             cur = self.conn.execute(
                 "INSERT INTO command_inbox(session_id, command_type, payload, status, available_at, created_at) VALUES(?,?,?,?,?,?)",
                 (session_id, command_type, self._json(payload), "pending", now(), now()),
