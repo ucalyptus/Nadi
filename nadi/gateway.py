@@ -28,17 +28,29 @@ class Gateway:
     ) -> dict[str, Any]:
         """Idempotently map a platform channel/thread to a session.
 
-        If the (platform, channel_id, thread_id) tuple already has a session,
-        return it. Otherwise create a new session, place it, and register the
-        channel mapping. This is the multi-channel analogue of create_session.
+        Race-safe: creates a candidate session, then uses INSERT OR IGNORE on
+        the channel row so that concurrent callers both converge on the same
+        session. If we lose the race, our candidate session is abandoned and
+        the winner's session_id is returned. The channel row's session_id is
+        immutable once written.
         """
-        existing = self.store.get_channel(platform, channel_id, thread_id)
-        if existing:
-            return {"session_id": existing["session_id"], "channel_id": existing["id"], "created": False}
+        import uuid as _uuid
+        # Each anonymous caller gets a unique resource ID to avoid memory collisions.
+        resource_id = initiator_resource_id or f"{platform}:anon-{_uuid.uuid4().hex[:8]}"
         sid = self.store.create_session(tenant_id=tenant_id, metadata=metadata or {})
-        self.broker.place_session(sid)
-        cid = self.store.upsert_channel(platform, channel_id, thread_id, sid, initiator_resource_id or f"{platform}:anonymous", metadata)
-        return {"session_id": sid, "channel_id": cid, "created": True}
+        try:
+            self.broker.place_session(sid)
+            actual_sid, cid, created = self.store.get_or_create_channel(
+                platform, channel_id, thread_id, sid, resource_id, metadata
+            )
+            if not created:
+                # We lost the race — mark our candidate session as abandoned so
+                # it doesn't leak as a permanent zombie.
+                self.store.update_session_status(sid, "abandoned")
+            return {"session_id": actual_sid, "channel_id": cid, "created": created}
+        except Exception:
+            self.store.update_session_status(sid, "abandoned")
+            raise
 
     def route(self, session_id: str) -> dict[str, Any]:
         route = self.store.get_route(session_id)

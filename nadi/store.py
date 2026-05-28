@@ -330,28 +330,41 @@ class Store:
 
     # ── Channel routing ──────────────────────────────────────────────────────
 
-    def upsert_channel(self, platform: str, channel_id: str, thread_id: str, session_id: str, initiator_resource_id: str, metadata: Json | None = None) -> str:
-        """Map a platform channel/thread to a session. Returns the internal channel row id."""
+    def get_or_create_channel(
+        self,
+        platform: str,
+        channel_id: str,
+        thread_id: str,
+        session_id: str,
+        initiator_resource_id: str,
+        metadata: Json | None = None,
+    ) -> tuple[str, str, bool]:
+        """Atomically map (platform, channel_id, thread_id) → session_id.
+
+        Uses INSERT OR IGNORE so that concurrent callers are race-safe — the
+        UNIQUE constraint on (platform, channel_id, thread_id) guarantees only
+        one row wins. The canonical session_id is read back from the DB after
+        the INSERT, so the caller always gets the winner's session, not their
+        own potentially-losing one.
+
+        Returns (actual_session_id, channel_row_id, created).
+        session_id is immutable once set — subsequent calls never overwrite it.
+        """
         t = now()
+        cid = str(uuid.uuid4())
         with self._lock:
-            existing = self.conn.execute(
-                "SELECT id FROM channels WHERE platform=? AND channel_id=? AND thread_id=?",
+            self.conn.execute(
+                "INSERT OR IGNORE INTO channels(id, platform, channel_id, thread_id, session_id, initiator_resource_id, metadata, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                (cid, platform, channel_id, thread_id, session_id, initiator_resource_id, self._json(metadata), t, t),
+            )
+            self.conn.commit()
+            row = self.conn.execute(
+                "SELECT * FROM channels WHERE platform=? AND channel_id=? AND thread_id=?",
                 (platform, channel_id, thread_id),
             ).fetchone()
-            if existing:
-                self.conn.execute(
-                    "UPDATE channels SET session_id=?, metadata=?, updated_at=? WHERE id=?",
-                    (session_id, self._json(metadata), t, existing["id"]),
-                )
-                cid = existing["id"]
-            else:
-                cid = str(uuid.uuid4())
-                self.conn.execute(
-                    "INSERT INTO channels(id, platform, channel_id, thread_id, session_id, initiator_resource_id, metadata, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
-                    (cid, platform, channel_id, thread_id, session_id, initiator_resource_id, self._json(metadata), t, t),
-                )
-            self.conn.commit()
-        return cid
+        actual = self._row(row)  # type: ignore[arg-type]
+        created = actual["session_id"] == session_id and actual["id"] == cid
+        return actual["session_id"], actual["id"], created
 
     def get_channel(self, platform: str, channel_id: str, thread_id: str = "") -> Json | None:
         with self._lock:
@@ -363,20 +376,29 @@ class Store:
 
     # ── Resource (per-user) memory ───────────────────────────────────────────
 
+    _MAX_MEMORY_BYTES = 1 * 1024 * 1024  # 1 MB per resource
+
     def get_resource_memory(self, resource_id: str) -> Json:
-        row = self.conn.execute("SELECT memory FROM resources WHERE resource_id=?", (resource_id,)).fetchone()
+        with self._lock:
+            row = self.conn.execute("SELECT memory FROM resources WHERE resource_id=?", (resource_id,)).fetchone()
         if row is None:
             return {}
-        return json.loads(row["memory"])
+        try:
+            return json.loads(row["memory"])
+        except json.JSONDecodeError:
+            return {}
 
     def set_resource_memory(self, resource_id: str, memory: Json, platform: str = "unknown") -> None:
+        blob = self._json(memory)
+        if len(blob.encode()) > self._MAX_MEMORY_BYTES:
+            raise ValueError(f"memory blob exceeds {self._MAX_MEMORY_BYTES} bytes")
         t = now()
         with self._lock:
             self.conn.execute(
                 """INSERT INTO resources(resource_id, platform, memory, created_at, updated_at)
                    VALUES(?,?,?,?,?)
                    ON CONFLICT(resource_id) DO UPDATE SET memory=excluded.memory, updated_at=excluded.updated_at""",
-                (resource_id, platform, self._json(memory), t, t),
+                (resource_id, platform, blob, t, t),
             )
             self.conn.commit()
 
